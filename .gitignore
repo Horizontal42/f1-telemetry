@@ -23,8 +23,3 @@ Thumbs.db
 # Editor / tooling
 .idea/
 .vscode/
-.claude/
-.aider*
-.cursorrules
-*_ai_notes*
-llm_context*
