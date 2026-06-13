@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Telemetry data and generated output (live outside this repo, ignored if nested)
+*.csv
+reports/
+races/
+
+# ...but test fixtures must be tracked
+!tests/fixtures/
+!tests/fixtures/*.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / tooling
+.idea/
+.vscode/
+.claude/
+.aider*
+.cursorrules
+*_ai_notes*
+llm_context*
