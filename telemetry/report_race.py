@@ -78,6 +78,14 @@ def _header(laps: list[Lap]) -> str:
     return '\n'.join(lines)
 
 
+def _race_pos(lap: Lap) -> str:
+    pos = lap.ch.get('RacePosition', [])
+    if not pos:
+        return '—'
+    v = int(pos[-1])
+    return str(v) if v > 0 else '—'
+
+
 def _lap_times_table(laps: list[Lap], stints: list[int], ages: list[int]) -> str:
     # find fastest valid lap time
     best_time = None
@@ -110,6 +118,7 @@ def _lap_times_table(laps: list[Lap], stints: list[int], ages: list[int]) -> str
 
         rows.append([
             lap_n,
+            _race_pos(lap),
             _fmt_laptime(lt) if lt > 0 else '—',
             _fmt_sector(s1) if s1 > 0 else '—',
             _fmt_sector(s2) if s2 > 0 else '—',
@@ -121,7 +130,7 @@ def _lap_times_table(laps: list[Lap], stints: list[int], ages: list[int]) -> str
         ])
 
     return md_table(
-        ['Lap', 'Time', 'S1', 'S2', 'S3', 'Tyre', 'Age', 'Fuel kg', 'Note'],
+        ['Lap', 'Pos', 'Time', 'S1', 'S2', 'S3', 'Tyre', 'Age', 'Fuel kg', 'Note'],
         rows,
     )
 

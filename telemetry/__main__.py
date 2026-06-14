@@ -103,9 +103,7 @@ def main() -> None:
             sys.exit(2)
         laps = [load_lap(os.path.join(race_dir, f)) for f in csv_files]
         dirname = os.path.basename(race_dir.rstrip('/\\'))
-        out = os.path.join(
-            os.path.dirname(os.path.dirname(race_dir)), 'reports', dirname + '_race.md'
-        )
+        out = os.path.join(race_dir, 'reports', dirname + '_race.md')
         _print_result(*report_race.generate(laps, out, lang))
 
 

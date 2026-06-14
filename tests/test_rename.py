@@ -1,19 +1,18 @@
 import os
 import shutil
 import pytest
-from telemetry.rename import lap_token_present, insert_lap_token, read_lap_number, rename_unprocessed
+from telemetry.rename import (
+    lap_token_present, insert_lap_token, session_token_present,
+    insert_tokens, read_lap_number, read_session_type, rename_unprocessed,
+)
 
 
-# --- insert_lap_token ---
+# --- insert_lap_token (backward compat) ---
 
 @pytest.mark.parametrize("filename,lap,expected", [
-    # float token found → insert before it
     ("zandvoort_P_74.152_ferrari.csv", 8, "zandvoort_P_L8_74.152_ferrari.csv"),
-    # single non-float token → append
     ("weirdname.csv", 3, "weirdname_L3.csv"),
-    # two non-float tokens, no float → insert at index 2 (after 2nd token)
     ("track_session.csv", 5, "track_session_L5.csv"),
-    # extension preserved
     ("a_b_1.5.csv", 2, "a_b_L2_1.5.csv"),
 ])
 def test_insert_lap_token(filename, lap, expected):
@@ -24,15 +23,42 @@ def test_insert_lap_token(filename, lap, expected):
 
 @pytest.mark.parametrize("stem,expected", [
     ("a_L8_b", True),
-    ("a_L8_b.csv", True),   # stem may include extension (function splits on '_')
+    ("a_L8_b.csv", True),
     ("a_b", False),
     ("a_b.csv", False),
-    ("a_L_b", False),       # L without digits
+    ("a_L_b", False),
     ("L8", True),
     ("notoken", False),
 ])
 def test_lap_token_present(stem, expected):
     assert lap_token_present(stem) == expected
+
+
+# --- session_token_present ---
+
+@pytest.mark.parametrize("stem,expected", [
+    ("zandvoort_P1_L7_74.074_ferrari", True),
+    ("zandvoort_Q2_L3_ferrari", True),
+    ("zandvoort_R_L1_ferrari", True),
+    ("zandvoort_FP1_L5_ferrari", True),
+    ("zandvoort_P_74.074_ferrari", False),   # bare P without digit not matched
+    ("zandvoort_L7_74.074_ferrari", False),
+    ("notoken", False),
+])
+def test_session_token_present(stem, expected):
+    assert session_token_present(stem) == expected
+
+
+# --- insert_tokens ---
+
+@pytest.mark.parametrize("filename,session_type,lap,expected", [
+    ("zandvoort_74.074_ferrari.csv", "P1", 7, "zandvoort_P1_L7_74.074_ferrari.csv"),
+    ("zandvoort_P_74.074_ferrari.csv", "P1", 7, "zandvoort_P_P1_L7_74.074_ferrari.csv"),
+    ("track_session.csv", "Q2", 3, "track_session_Q2_L3.csv"),
+    ("weirdname.csv", "R", 1, "weirdname_R_L1.csv"),
+])
+def test_insert_tokens(filename, session_type, lap, expected):
+    assert insert_tokens(filename, session_type, lap) == expected
 
 
 # --- read_lap_number ---
@@ -45,34 +71,37 @@ def test_read_lap_number_truncated(truncated_path):
     assert read_lap_number(truncated_path) == 9
 
 
+# --- read_session_type ---
+
+def test_read_session_type_sample(sample_path):
+    assert read_session_type(sample_path) == 'P1'
+
+
 # --- rename_unprocessed ---
 
 def test_rename_unprocessed_renames(tmp_path, sample_path):
-    src = str(tmp_path / "zandvoort_P_74.074_ferrari.csv")
+    src = str(tmp_path / "zandvoort_74.074_ferrari.csv")
     shutil.copy(sample_path, src)
     results = rename_unprocessed([src])
     assert len(results) == 1
     r = results[0]
     assert r.status == "renamed"
-    assert r.new is not None and "L7" in r.new
+    assert r.new is not None and "L7" in r.new and "P1" in r.new
     assert os.path.exists(tmp_path / r.new)
 
 
 def test_rename_unprocessed_skips_already_tagged(tmp_path, sample_path):
-    # rename first so it has L7 in name
-    src = str(tmp_path / "zandvoort_P_74.074_ferrari.csv")
+    src = str(tmp_path / "zandvoort_74.074_ferrari.csv")
     shutil.copy(sample_path, src)
     rename_unprocessed([src])
-    # now run on the directory — only the renamed file is present, should be skipped
     results = rename_unprocessed([str(tmp_path)])
     assert all(r.status == "skipped" for r in results)
 
 
 def test_rename_unprocessed_error_target_exists(tmp_path, sample_path):
-    src = str(tmp_path / "zandvoort_P_74.074_ferrari.csv")
+    src = str(tmp_path / "zandvoort_74.074_ferrari.csv")
     shutil.copy(sample_path, src)
-    # pre-create the destination so rename sees a conflict
-    dest = str(tmp_path / "zandvoort_P_L7_74.074_ferrari.csv")
+    dest = str(tmp_path / "zandvoort_P1_L7_74.074_ferrari.csv")
     shutil.copy(sample_path, dest)
     results = rename_unprocessed([src])
     assert len(results) == 1
@@ -80,7 +109,7 @@ def test_rename_unprocessed_error_target_exists(tmp_path, sample_path):
 
 
 def test_rename_unprocessed_dir_target(tmp_path, sample_path):
-    src = str(tmp_path / "zandvoort_P_74.074_ferrari.csv")
+    src = str(tmp_path / "zandvoort_74.074_ferrari.csv")
     shutil.copy(sample_path, src)
     results = rename_unprocessed([str(tmp_path)])
     assert len(results) == 1

@@ -11,12 +11,12 @@ from .rename import rename_unprocessed
 
 # project root = parent of the tool\ dir
 _PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..'))
-_REPORTS_DIR = os.path.join(_PROJECT_ROOT, 'reports')
+_RACES_DIR = os.path.join(_PROJECT_ROOT, 'races')
 
 
 def _race_output_path(race_dir: str) -> str:
     dirname = os.path.basename(race_dir.rstrip('/\\'))
-    return os.path.join(_PROJECT_ROOT, 'reports', dirname + '_race.md')
+    return os.path.join(race_dir, 'reports', dirname + '_race.md')
 
 
 class _App:
@@ -68,7 +68,7 @@ class _App:
         self._btn_rename = ttk.Button(btn_frame, text='Rename unprocessed (add lap #)',
                                       command=self._on_rename)
         self._btn_rename.pack(side='left', padx=4)
-        ttk.Button(btn_frame, text='Open reports folder',
+        ttk.Button(btn_frame, text='Open races folder',
                    command=self._open_reports).pack(side='left', padx=4)
 
         log_frame = ttk.LabelFrame(self._root, text='Log')
@@ -192,7 +192,7 @@ class _App:
             self._log_queue.put(None)
 
     def _on_rename(self) -> None:
-        d = filedialog.askdirectory(title='Select folder to rename', initialdir=_PROJECT_ROOT)
+        d = filedialog.askdirectory(title='Select folder to rename', initialdir=_RACES_DIR)
         if not d:
             return
         self._set_busy(True)
@@ -216,10 +216,8 @@ class _App:
             self._log_queue.put(None)
 
     def _open_reports(self) -> None:
-        if not os.path.isdir(_REPORTS_DIR):
-            self._log_append(f'Reports folder does not exist yet: {_REPORTS_DIR}')
-            return
-        os.startfile(_REPORTS_DIR)
+        target = _RACES_DIR if os.path.isdir(_RACES_DIR) else _PROJECT_ROOT
+        os.startfile(target)
 
 
 def main() -> None:
