@@ -6,8 +6,8 @@ Turns raw F1 22 lap telemetry into compact Markdown reports you can paste into a
 
 ```bash
 # from the tool/ folder
-python -m telemetry technique ../zandvoort_P_L7_74.074_ferrari.csv
-# -> ../reports/zandvoort_P_L7_74.074_ferrari_technique.md   (~34k tokens)
+python -m telemetry technique "races/Zandvoort/Practice/zandvoort_P1_L7_74.074_ferrari.csv"
+# -> races/Zandvoort/Practice/reports/zandvoort_P1_L7_74.074_ferrari_technique.md   (~35k tokens)
 ```
 
 Or just double-click `run-gui.bat` and click **Generate report**.
@@ -29,21 +29,27 @@ Five modes. Four produce reports, one renames files.
 | `setup` | one lap | **what** is set — balance (US/OS), tyre temps, brakes, suspension rake & roll |
 | `compare` | two+ laps | **where** one lap is faster — per-corner and cumulative delta |
 | `race` | a folder of laps | the whole race — pace, stint degradation, tyre wear, ERS per lap |
-| `rename` | files/folder | insert the lap number into each filename (`..._74.074_...` → `..._L7_74.074_...`) |
+| `rename` | files/folder | insert session type and lap number into each filename (`..._74.074_...` → `..._P1_L7_74.074_...`) |
 
-Reports include a legend explaining every column, so the LLM understands the data without extra prompting. Ready-made analysis prompts live in [`prompts/`](prompts/) — one per mode.
+Reports include a legend explaining every column and have the analysis prompt auto-appended at the end — just drop the file into an LLM. Prompts come in RU and EN; pick with `--lang en` on the CLI or the language radio in the GUI.
 
 ### Folder layout
 
-The program lives in `tool/`; your telemetry sits one level up, output lands next to it:
-
 ```
 Telemetry/
-  zandvoort_P_L7_74.074_ferrari.csv   <- raw laps here
   races/
-    Zandvoort_Race_2026/              <- one folder per race (for `race` mode)
-  reports/                            <- generated reports land here
-  tool/                               <- this repository
+    Zandvoort/
+      Practice/                        <- CSVs go here after renaming
+        zandvoort_P1_L7_74.074_ferrari.csv
+        reports/                       <- technique/setup/compare reports land here
+      Qualifying/
+        zandvoort_Q1_L3_74.897_ferrari.csv
+        reports/
+      Race/
+        zandvoort_R_L7_74.152_ferrari.csv
+        reports/
+          Race_race.md                 <- race mode report
+  tool/                                <- this repository
     telemetry/
     prompts/
     run-gui.bat
@@ -51,16 +57,19 @@ Telemetry/
 
 ## Handy things
 
-**GUI** — double-click `run-gui.bat` (or `run-gui.pyw` for no console window, or run `python -m telemetry gui`). Pick a mode, browse to the file/folder, click Generate. The **Rename unprocessed** button adds lap numbers to files that don't have them yet and leaves the rest alone.
+**GUI** — double-click `run-gui.bat` (or `run-gui.pyw` for no console window, or run `python -m telemetry gui`). Pick a mode and language (RU/EN), browse to the file/folder, click Generate. The file browser remembers the last used directory per mode. The **Rename unprocessed** button adds the session type and lap number to files that don't have them yet and leaves the rest alone.
 
 **CLI** — from the `tool/` folder:
 
 ```bash
-python -m telemetry technique ../lap.csv
-python -m telemetry setup     ../lap.csv
-python -m telemetry compare   ../lap_a.csv ../lap_b.csv
-python -m telemetry race      ../races/Zandvoort_Race_2026
-python -m telemetry rename    ../races/Zandvoort_Race_2026   # or individual files
+python -m telemetry technique races/Zandvoort/Practice/lap.csv
+python -m telemetry setup     races/Zandvoort/Practice/lap.csv
+python -m telemetry compare   races/Zandvoort/Practice/lap_a.csv races/Zandvoort/Practice/lap_b.csv
+python -m telemetry race      races/Zandvoort/Race
+python -m telemetry rename    races/Zandvoort/Practice   # or individual files
+
+# choose prompt language (default: ru)
+python -m telemetry technique races/Zandvoort/Practice/lap.csv --lang en
 ```
 
 Every report run prints the output path and a token estimate:
@@ -70,7 +79,7 @@ C:\...\Telemetry\reports\lap_technique.md
 ~33834 tokens (budget 60k)
 ```
 
-**Rename only touches unprocessed files.** A file is "processed" once its name contains an `L<number>` token, so re-running rename is safe and idempotent.
+**Rename only touches unprocessed files.** A file is "processed" once its name contains both a session token (`P1`, `Q2`, `R`, …) and an `L<number>` token. Re-running rename on the same folder is safe.
 
 ## Input format
 

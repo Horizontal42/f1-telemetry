@@ -13,14 +13,14 @@ telemetry/
   segments.py        Lap -> corners & straights. Zone detection + numbering.
   corner_metrics.py  Per-zone number crunching: braking point, lock/spin, coast, temps.
   resample.py        Adaptive distance grid + channel interpolation for the trace.
-  report_common.py   Header block, legend strings, md_table, token_estimate, atomic write.
+  report_common.py   Header block, legend strings, md_table, token_estimate, load_prompt, atomic write.
   report_technique.py  Driving report (corners, straights, cost, trace).
   report_setup.py    Car report (setup, balance, tyres, brakes, suspension, phases).
   report_compare.py  Two+ laps side by side, per-corner and cumulative delta.
-  report_race.py     A folder of laps: lap times, stints, wear, thermals, ERS.
-  rename.py          Insert lap number into filenames; skip already-processed.
-  gui.py             tkinter window; runs generation/rename on a worker thread.
-prompts/             Russian LLM prompts, one per report mode.
+  report_race.py     A folder of laps: lap times (with position), stints, wear, thermals, ERS.
+  rename.py          Insert session type + lap number (e.g. P1_L7) into filenames; skip processed.
+  gui.py             tkinter window; per-mode browse memory; runs generation/rename on a worker thread.
+prompts/             LLM analysis prompts, ru/ and en/ subdirectories, one file per mode. Auto-appended to every report.
 tests/               pytest suite + fixture laps.
 ```
 
@@ -30,7 +30,7 @@ tests/               pytest suite + fixture laps.
 2. **`parser.load_lap`** reads the file as UTF-8 and splits it into four meta blocks (session, track, setup) plus the 108-channel telemetry table. Channel names are normalised by stripping the ` [unit]` suffix. Every column that is entirely zero is dropped — the game writes many dead channels (see Gotchas).
 3. **`segments.detect_corners`** walks the samples, marks each as "cornering" when `|Steer| > STEER_ON` or `Brake > BRAKE_ON`, merges adjacent zones closer than `MERGE_GAP_M`, drops zones shorter than `MIN_LEN_M`, and numbers what's left T1..Tn by distance. For each zone it calls **`corner_metrics.corner_from_zone`**, which extracts the braking point, apex, gear, full-throttle point, peak brake/gLat, relative lock%/spin%, coast distance, and rear tyre temperature peak. `straights` fills the gaps between corners.
 4. **`resample.adaptive_points`** builds a distance grid that is dense inside (and on approach to) corners and sparse on straights — the step sizes default to the lap's own median sample spacing via `auto_steps`, so denser raw telemetry yields a denser trace. **`sample_at`** interpolates each channel onto that grid (nearest-sample for discrete channels like Gear/DRS).
-5. The **`report_<mode>.generate`** function assembles Markdown from `report_common` helpers (`header_block`, `md_table`, `legend`) and the data above, then calls **`report_common.write_report`**, which writes atomically (temp file + `os.replace`) and returns `(abs_path, tokens)`.
+5. The **`report_<mode>.generate(…, lang)`** function assembles Markdown from `report_common` helpers (`header_block`, `md_table`, `legend`) and the data above. It then calls **`load_prompt(mode, lang)`** to read the matching prompt from `prompts/<lang>/<mode>.md` and appends it after a `---` separator. Finally **`write_report`** writes atomically (temp file + `os.replace`) and returns `(abs_path, tokens)`.
 6. **`__main__`** prints that path and `~N tokens (budget 60k)`. The **GUI** shows the same tuple in its log instead of printing.
 
 ## Adding things
@@ -53,6 +53,6 @@ tests/               pytest suite + fixture laps.
 
 **The setup row has a trailing comma** (an empty `FuelLoad` tail field in some exports). The parser drops trailing empties so the setup dict has no blank-string key.
 
-**Rename idempotency hinges on the `L<digits>` token.** `lap_token_present` is the single source of truth for "already processed". Changing the token format means changing both `insert_lap_token` and `lap_token_present` together, or rename stops being safe to re-run.
+**Rename idempotency hinges on TWO tokens.** A file is considered processed only when both a session token (`P1`, `Q2`, `R`, …, matched by `_SESSION_PAT`) and a lap token (`L<digits>`) are present in the stem. Both `session_token_present` and `lap_token_present` are the joint source of truth — changing either token format means updating both the insert and the presence-check functions together.
 
-**Reports go next to the input, not next to the program.** `report_path` derives the `reports/` directory from the *input CSV's* folder; `race` mode computes it from the race folder's parent. Moving the tool does not move where reports land.
+**Reports go next to the input, not next to the program.** `report_path` derives the `reports/` directory from the *input CSV's* folder. `race` mode puts the report inside the race session folder (`<race_dir>/reports/`). Moving the tool does not move where reports land.
