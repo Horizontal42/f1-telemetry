@@ -28,6 +28,7 @@ class _App:
         self._mode = tk.StringVar(value='technique')
         self._lang = tk.StringVar(value='ru')
         self._selection: list[str] = []
+        self._last_dir: dict[str, str] = {}
         self._log_queue: queue.Queue[str | None] = queue.Queue()
         self._busy = False
 
@@ -79,12 +80,13 @@ class _App:
 
     def _browse(self) -> None:
         mode = self._mode.get()
-        init = _PROJECT_ROOT
+        init = self._last_dir.get(mode, _RACES_DIR)
         if mode == 'race':
             d = filedialog.askdirectory(title='Select race folder', initialdir=init)
             if d:
                 self._selection = [d]
                 self._path_var.set(d)
+                self._last_dir[mode] = d
         elif mode == 'compare':
             files = filedialog.askopenfilenames(
                 title='Select 2+ CSV files', initialdir=init,
@@ -92,6 +94,7 @@ class _App:
             if files:
                 self._selection = list(files)
                 self._path_var.set('  |  '.join(os.path.basename(f) for f in files))
+                self._last_dir[mode] = os.path.dirname(files[0])
         else:
             f = filedialog.askopenfilename(
                 title='Select CSV file', initialdir=init,
@@ -99,6 +102,7 @@ class _App:
             if f:
                 self._selection = [f]
                 self._path_var.set(f)
+                self._last_dir[mode] = os.path.dirname(f)
 
     def _validate_selection(self) -> str | None:
         mode = self._mode.get()
