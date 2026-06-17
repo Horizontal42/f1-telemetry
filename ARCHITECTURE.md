@@ -18,7 +18,7 @@ telemetry/
   report_setup.py    Car report (setup, balance, tyres, brakes, suspension, phases).
   report_compare.py  Two+ laps side by side, per-corner and cumulative delta.
   report_race.py     A folder of laps: lap times (with position), stints, wear, thermals, ERS.
-  rename.py          Insert session type + lap number (e.g. P1_L7) into filenames; skip processed.
+  rename.py          Insert session type + lap number (P1_L7) into filenames; with races_dir, sort into races/<track>/<session>/ and recurse subdirectories.
   gui.py             tkinter window; per-mode browse memory; runs generation/rename on a worker thread.
 prompts/             LLM analysis prompts, ru/ and en/ subdirectories, one file per mode. Auto-appended to every report.
 tests/               pytest suite + fixture laps.
@@ -53,6 +53,6 @@ tests/               pytest suite + fixture laps.
 
 **The setup row has a trailing comma** (an empty `FuelLoad` tail field in some exports). The parser drops trailing empties so the setup dict has no blank-string key.
 
-**Rename idempotency hinges on TWO tokens.** A file is considered processed only when both a session token (`P1`, `Q2`, `R`, …, matched by `_SESSION_PAT`) and a lap token (`L<digits>`) are present in the stem. Both `session_token_present` and `lap_token_present` are the joint source of truth — changing either token format means updating both the insert and the presence-check functions together.
+**Rename with `races_dir` sorts into folders and walks subdirectories.** `rename_unprocessed(targets, races_dir)` when `races_dir` is set: (1) recursively scans all subdirectories via `os.walk`, (2) reads metadata from each CSV (`read_metadata` → lap, event, track), (3) inserts tokens if absent, (4) creates `races/<track_safe>/Practice|Qualifying|Race|Sprint/` and moves the file there, (5) even already-renamed files are moved if they're in the wrong folder, (6) only skips files that are already in the right place with the right name. Without `races_dir` it works as before — renames in-place in the original folder.
 
 **Reports go next to the input, not next to the program.** `report_path` derives the `reports/` directory from the *input CSV's* folder. `race` mode puts the report inside the race session folder (`<race_dir>/reports/`). Moving the tool does not move where reports land.

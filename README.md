@@ -79,7 +79,15 @@ C:\...\Telemetry\reports\lap_technique.md
 ~33834 tokens (budget 60k)
 ```
 
-**Rename only touches unprocessed files.** A file is "processed" once its name contains both a session token (`P1`, `Q2`, `R`, …) and an `L<number>` token. Re-running rename on the same folder is safe.
+**Rename inserts tokens AND sorts into folders.** Point it at a folder containing CSVs (e.g., `D:\Games\Telemetry\Data\lapdata\f1_2022`) — the script:
+- Recursively scans all subdirectories
+- Reads metadata from each CSV (track, session type)
+- Inserts `P1_L7` into filenames that don't have both tokens yet
+- Moves files to `races/<track>/Practice|Qualifying|Race/`
+- Even already-renamed files are moved if they're not in the right folder
+- Only skips files that are already in the correct location with the correct name
+
+Re-running on the same folder is safe — in-place files are left alone.
 
 ## Input format
 
