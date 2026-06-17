@@ -204,7 +204,7 @@ class _App:
 
     def _worker_rename(self, d: str) -> None:
         try:
-            results = rename_unprocessed([d])
+            results = rename_unprocessed([d], races_dir=_RACES_DIR)
             if not results:
                 self._push('No CSV files found')
             for r in results:

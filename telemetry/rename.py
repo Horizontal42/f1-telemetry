@@ -7,6 +7,23 @@ from .parser import _parse_header_row, _parse_value_row
 _SESSION_PAT = re.compile(r'^(FP[1-3]|P[1-3]|Q[1-3]|R|Race|Sprint)$', re.IGNORECASE)
 
 
+def _session_folder(event: str) -> str:
+    e = event.upper()
+    if re.match(r'^(FP[1-3]|P[1-3])$', e):
+        return 'Practice'
+    if re.match(r'^(SQ[1-3]|Q[1-3])$', e):
+        return 'Qualifying'
+    if re.match(r'^SPRINT$', e):
+        return 'Sprint'
+    if re.match(r'^(R|RACE)$', e):
+        return 'Race'
+    return 'Other'
+
+
+def _safe_dirname(name: str) -> str:
+    return re.sub(r'[<>:"/\\|?*]', '_', name).strip(' .')
+
+
 def lap_token_present(stem: str) -> bool:
     return any(re.fullmatch(r'L\d+', t) for t in stem.split('_'))
 
@@ -68,6 +85,23 @@ def read_session_type(path: str) -> str:
     return session.get('event', '').strip()
 
 
+def read_metadata(path: str) -> tuple[int, str, str]:
+    """Returns (lap_number, event_type, track_name)."""
+    with open(path, encoding='utf-8') as f:
+        lines = [f.readline() for _ in range(5)]
+    sess_keys = _parse_header_row(lines[1])
+    sess_vals = _parse_value_row(lines[2])
+    session = dict(zip(sess_keys, sess_vals))
+    track_keys = _parse_header_row(lines[3])
+    track_vals = _parse_value_row(lines[4])
+    track = dict(zip(track_keys, track_vals))
+    return (
+        int(float(track['Lap'])),
+        session.get('event', '').strip(),
+        session.get('track', '').strip(),
+    )
+
+
 @dataclass(frozen=True)
 class RenameResult:
     old: str
@@ -76,7 +110,7 @@ class RenameResult:
     detail: str
 
 
-def rename_unprocessed(targets: list[str]) -> list[RenameResult]:
+def rename_unprocessed(targets: list[str], races_dir: str | None = None) -> list[RenameResult]:
     paths: list[str] = []
     for t in targets:
         t = os.path.abspath(t)
@@ -101,8 +135,7 @@ def rename_unprocessed(targets: list[str]) -> list[RenameResult]:
             results.append(RenameResult(name, None, 'skipped', 'already processed'))
             continue
         try:
-            lap = read_lap_number(p)
-            session_type = read_session_type(p)
+            lap, session_type, track_name = read_metadata(p)
         except Exception as e:
             results.append(RenameResult(name, None, 'error', str(e)))
             continue
@@ -110,14 +143,19 @@ def rename_unprocessed(targets: list[str]) -> list[RenameResult]:
             results.append(RenameResult(name, None, 'error', 'session type not found in CSV'))
             continue
         new_name = insert_tokens(name, session_type, lap)
-        dest = os.path.join(os.path.dirname(p), new_name)
+        if races_dir is not None:
+            dest_dir = os.path.join(races_dir, _safe_dirname(track_name), _session_folder(session_type))
+            os.makedirs(dest_dir, exist_ok=True)
+        else:
+            dest_dir = os.path.dirname(p)
+        dest = os.path.join(dest_dir, new_name)
         if os.path.exists(dest):
-            results.append(RenameResult(name, new_name, 'error', 'target exists'))
+            results.append(RenameResult(name, dest, 'error', 'target exists'))
             continue
         try:
             os.rename(p, dest)
         except OSError as e:
-            results.append(RenameResult(name, new_name, 'error', str(e)))
+            results.append(RenameResult(name, dest, 'error', str(e)))
             continue
-        results.append(RenameResult(name, new_name, 'renamed', ''))
+        results.append(RenameResult(name, dest, 'renamed', ''))
     return results

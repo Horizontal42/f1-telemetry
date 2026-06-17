@@ -7,6 +7,8 @@ from .report_common import report_path
 from . import report_technique, report_setup, report_compare, report_race
 from .rename import rename_unprocessed
 
+_RACES_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..', 'races'))
+
 
 def _print_result(abs_path: str, tokens: int) -> None:
     print(abs_path)
@@ -28,7 +30,7 @@ def _run_rename(targets: list[str]) -> None:
         print('Error: no CSV targets resolved', file=sys.stderr)
         sys.exit(2)
 
-    results = rename_unprocessed(targets)
+    results = rename_unprocessed(targets, races_dir=_RACES_DIR)
     for r in results:
         if r.status == 'renamed':
             print(f'renamed: {r.old} -> {r.new}')
