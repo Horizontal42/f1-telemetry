@@ -196,9 +196,11 @@ class _App:
             self._log_queue.put(None)
 
     def _on_rename(self) -> None:
-        d = filedialog.askdirectory(title='Select folder to rename', initialdir=_RACES_DIR)
+        init = self._last_dir.get('rename', os.path.expanduser('~'))
+        d = filedialog.askdirectory(title='Select folder with CSV files', initialdir=init)
         if not d:
             return
+        self._last_dir['rename'] = d
         self._set_busy(True)
         threading.Thread(target=self._worker_rename, args=(d,), daemon=True).start()
 
@@ -209,7 +211,8 @@ class _App:
                 self._push('No CSV files found')
             for r in results:
                 if r.status == 'renamed':
-                    self._push(f'renamed: {r.old} -> {r.new}')
+                    new_display = os.path.relpath(r.new, _RACES_DIR) if r.new and r.new.startswith(_RACES_DIR) else r.new
+                    self._push(f'renamed: {r.old} -> {new_display}')
                 elif r.status == 'skipped':
                     self._push(f'skipped: {r.old} ({r.detail})')
                 else:

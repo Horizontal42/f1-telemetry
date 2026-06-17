@@ -139,3 +139,40 @@ def test_rename_unprocessed_moves_to_races_dir(tmp_path, sample_path):
     assert r.new.startswith(races_dir)
     assert 'Practice' in r.new
     assert not os.path.exists(src)
+
+
+def test_rename_unprocessed_moves_already_renamed(tmp_path, sample_path):
+    """Already-renamed file in wrong folder gets moved to correct folder."""
+    src = str(tmp_path / "zandvoort_P1_L7_74.074_ferrari.csv")
+    shutil.copy(sample_path, src)
+    races_dir = str(tmp_path / 'races')
+    results = rename_unprocessed([src], races_dir=races_dir)
+    assert len(results) == 1
+    r = results[0]
+    assert r.status == 'renamed'
+    assert 'Practice' in r.new
+    assert os.path.exists(r.new)
+    assert not os.path.exists(src)
+
+
+def test_rename_unprocessed_skips_already_in_place(tmp_path, sample_path):
+    """File already in correct folder is skipped on second run."""
+    src = str(tmp_path / "zandvoort_74.074_ferrari.csv")
+    shutil.copy(sample_path, src)
+    races_dir = str(tmp_path / 'races')
+    rename_unprocessed([src], races_dir=races_dir)
+    results = rename_unprocessed([races_dir], races_dir=races_dir)
+    assert all(r.status == 'skipped' for r in results)
+
+
+def test_rename_unprocessed_walks_subdirs(tmp_path, sample_path):
+    """With races_dir, scans subdirectories recursively."""
+    sub = tmp_path / 'sub' / 'nested'
+    sub.mkdir(parents=True)
+    src = str(sub / "zandvoort_74.074_ferrari.csv")
+    shutil.copy(sample_path, src)
+    races_dir = str(tmp_path / 'races')
+    results = rename_unprocessed([str(tmp_path)], races_dir=races_dir)
+    assert len(results) == 1
+    assert results[0].status == 'renamed'
+    assert 'Practice' in results[0].new

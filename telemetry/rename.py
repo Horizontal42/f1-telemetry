@@ -115,9 +115,15 @@ def rename_unprocessed(targets: list[str], races_dir: str | None = None) -> list
     for t in targets:
         t = os.path.abspath(t)
         if os.path.isdir(t):
-            for name in os.listdir(t):
-                if name.lower().endswith('.csv'):
-                    paths.append(os.path.join(t, name))
+            if races_dir is not None:
+                for root, _, files in os.walk(t):
+                    for fname in sorted(files):
+                        if fname.lower().endswith('.csv'):
+                            paths.append(os.path.join(root, fname))
+            else:
+                for fname in os.listdir(t):
+                    if fname.lower().endswith('.csv'):
+                        paths.append(os.path.join(t, fname))
         else:
             paths.append(t)
 
@@ -131,25 +137,39 @@ def rename_unprocessed(targets: list[str], races_dir: str | None = None) -> list
             results.append(RenameResult(name, None, 'error', 'not a CSV file'))
             continue
         stem = os.path.splitext(name)[0]
-        if _is_processed(stem):
-            results.append(RenameResult(name, None, 'skipped', 'already processed'))
-            continue
-        try:
-            lap, session_type, track_name = read_metadata(p)
-        except Exception as e:
-            results.append(RenameResult(name, None, 'error', str(e)))
-            continue
-        if not session_type:
-            results.append(RenameResult(name, None, 'error', 'session type not found in CSV'))
-            continue
-        new_name = insert_tokens(name, session_type, lap)
-        if races_dir is not None:
-            dest_dir = os.path.join(races_dir, _safe_dirname(track_name), _session_folder(session_type))
-            os.makedirs(dest_dir, exist_ok=True)
+
+        if races_dir is None:
+            if _is_processed(stem):
+                results.append(RenameResult(name, None, 'skipped', 'already processed'))
+                continue
+            try:
+                lap, session_type, _ = read_metadata(p)
+            except Exception as e:
+                results.append(RenameResult(name, None, 'error', str(e)))
+                continue
+            if not session_type:
+                results.append(RenameResult(name, None, 'error', 'session type not found in CSV'))
+                continue
+            new_name = insert_tokens(name, session_type, lap)
+            dest = os.path.join(os.path.dirname(p), new_name)
         else:
-            dest_dir = os.path.dirname(p)
-        dest = os.path.join(dest_dir, new_name)
-        if os.path.exists(dest):
+            try:
+                lap, session_type, track_name = read_metadata(p)
+            except Exception as e:
+                results.append(RenameResult(name, None, 'error', str(e)))
+                continue
+            if not session_type:
+                results.append(RenameResult(name, None, 'error', 'session type not found in CSV'))
+                continue
+            new_name = name if _is_processed(stem) else insert_tokens(name, session_type, lap)
+            dest_dir = os.path.join(races_dir, _safe_dirname(track_name), _session_folder(session_type))
+            dest = os.path.join(dest_dir, new_name)
+            if os.path.abspath(p) == os.path.abspath(dest):
+                results.append(RenameResult(name, None, 'skipped', 'already in place'))
+                continue
+            os.makedirs(dest_dir, exist_ok=True)
+
+        if os.path.exists(dest) and os.path.abspath(dest) != os.path.abspath(p):
             results.append(RenameResult(name, dest, 'error', 'target exists'))
             continue
         try:
