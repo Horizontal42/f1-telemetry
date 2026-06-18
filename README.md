@@ -21,17 +21,22 @@ Download or clone the repository. Keep your telemetry CSVs in the parent folder 
 
 ## What it does
 
-Five modes. Four produce reports, one renames files.
+Six modes. Five produce reports, one renames files.
 
 | Mode | Input | Use it to analyse |
 |------|-------|-------------------|
 | `technique` | one lap | **how** you drive — braking points, apex speeds, throttle application, lockups, resource cost |
 | `setup` | one lap | **what** is set — balance (US/OS), tyre temps, brakes, suspension rake & roll |
-| `compare` | two+ laps | **where** one lap is faster — per-corner and cumulative delta |
+| `compare` | two+ laps | **where** one lap is faster — per-corner and cumulative delta, plus a deterministic `Verdict` (fuel-corrected) |
 | `race` | a folder of laps | the whole race — pace, stint degradation, tyre wear, ERS per lap |
+| `profile` | a folder of laps | **cheap** (~400 tokens) cross-lap driver tendencies per tyre compound (median coast/lock/spin per corner, flagged relative to the session) + auto-picked laps to deep-dive. Track-agnostic: corners are clustered by apex distance, not index |
 | `rename` | files/folder | insert session type and lap number into each filename (`..._74.074_...` → `..._P1_L7_74.074_...`) |
 
 Reports include a legend explaining every column and have the analysis prompt auto-appended at the end — just drop the file into an LLM. Prompts come in RU and EN; pick with `--lang en` on the CLI or the language radio in the GUI.
+
+**Flags:** `--no-prompt` omits the embedded analysis prompt (smaller files for agent pipelines; in the GUI it's the **Include prompt** checkbox). `--force` regenerates even when an up-to-date report already exists (runs are otherwise skipped as `cached`).
+
+> Typical optimized flow: run `profile` first to see chronic tendencies and which laps matter, then generate `technique`/`setup`/`compare` only for those laps with `--no-prompt`.
 
 ### Folder layout
 
@@ -66,10 +71,15 @@ python -m telemetry technique races/Zandvoort/Practice/lap.csv
 python -m telemetry setup     races/Zandvoort/Practice/lap.csv
 python -m telemetry compare   races/Zandvoort/Practice/lap_a.csv races/Zandvoort/Practice/lap_b.csv
 python -m telemetry race      races/Zandvoort/Race
+python -m telemetry profile   races/Zandvoort/Race        # cheap cross-lap tendencies + lap picks
 python -m telemetry rename    races/Zandvoort/Practice   # or individual files
 
 # choose prompt language (default: ru)
 python -m telemetry technique races/Zandvoort/Practice/lap.csv --lang en
+
+# agent pipeline: drop the prompt, reuse fresh reports
+python -m telemetry technique races/Zandvoort/Practice/lap.csv --no-prompt
+python -m telemetry technique races/Zandvoort/Practice/lap.csv --force   # ignore cache
 ```
 
 Every report run prints the output path and a token estimate:
