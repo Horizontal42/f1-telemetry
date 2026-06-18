@@ -23,6 +23,37 @@ def _fuel_start(lap: Lap) -> float:
     return v[0] if v else 0.0
 
 
+def _dedup_laps(laps: list[Lap]) -> list[Lap]:
+    def lap_num(lap: Lap) -> int:
+        try:
+            return int(lap.track.get('Lap', '0'))
+        except ValueError:
+            return 0
+
+    # Only dedup laps that carry a real positive lap number. Laps without one (export
+    # missing the field → all parse to 0) are kept verbatim, so a missing 'Lap' column
+    # can never silently collapse the whole race to a single lap.
+    numbered = [l for l in laps if lap_num(l) > 0]
+    unnumbered = [l for l in laps if lap_num(l) <= 0]
+
+    best: dict[int, Lap] = {}
+    for lap in numbered:
+        n = lap_num(lap)
+        cur = best.get(n)
+        if cur is None:
+            best[n] = lap
+            continue
+        lap_valid = lap.track.get('Valid', 'true').lower() != 'false'
+        cur_valid = cur.track.get('Valid', 'true').lower() != 'false'
+        if lap_valid != cur_valid:
+            if lap_valid:
+                best[n] = lap
+            continue
+        if laptime_s(lap) < laptime_s(cur):
+            best[n] = lap
+    return list(best.values()) + unnumbered
+
+
 def _sort_laps(laps: list[Lap]) -> list[Lap]:
     def lap_num(lap: Lap) -> int:
         try:
@@ -262,7 +293,8 @@ def _ers_table(laps: list[Lap]) -> str:
     return md_table(['Lap', 'ERS MJ', 'MGU-K MJ', 'MGU-H MJ'], rows)
 
 
-def generate(laps: list[Lap], out_path: str, lang: str = 'ru') -> tuple[str, int]:
+def generate(laps: list[Lap], out_path: str, lang: str = 'ru', include_prompt: bool = True) -> tuple[str, int]:
+    laps = _dedup_laps(laps)
     laps = _sort_laps(laps)
     stints, ages = _assign_stints(laps)
 
@@ -280,7 +312,8 @@ def generate(laps: list[Lap], out_path: str, lang: str = 'ru') -> tuple[str, int
         _ers_table(laps),
     ]
     text = '\n'.join(parts)
-    prompt = load_prompt('race', lang)
-    if prompt:
-        text += '\n\n---\n\n' + prompt
+    if include_prompt:
+        prompt = load_prompt('race', lang)
+        if prompt:
+            text += '\n\n---\n\n' + prompt
     return write_report(out_path, text)

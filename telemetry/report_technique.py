@@ -150,7 +150,7 @@ def _trace_block(lap: Lap, corners: list[Corner]) -> str:
     return '```\n' + header + '\n' + '\n'.join(rows) + '\n```'
 
 
-def generate(lap: Lap, out_path: str, lang: str = 'ru') -> tuple[str, int]:
+def generate(lap: Lap, out_path: str, lang: str = 'ru', include_prompt: bool = True) -> tuple[str, int]:
     corners = detect_corners(lap)
     ss = straights(corners, lap)
 
@@ -181,7 +181,8 @@ def generate(lap: Lap, out_path: str, lang: str = 'ru') -> tuple[str, int]:
         ]),
     ]
     text = '\n'.join(parts)
-    prompt = load_prompt('technique', lang)
-    if prompt:
-        text += '\n\n---\n\n' + prompt
+    if include_prompt:
+        prompt = load_prompt('technique', lang)
+        if prompt:
+            text += '\n\n---\n\n' + prompt
     return write_report(out_path, text)

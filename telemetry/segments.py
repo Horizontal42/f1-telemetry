@@ -4,12 +4,31 @@ from .parser import Lap
 
 STEER_ON = 6.0
 BRAKE_ON = 5.0
-MERGE_GAP_M = 40.0
+MERGE_GAP_M = 40.0          # anchored at Zandvoort (~4257 m): tracks scale around this
+MERGE_GAP_REF_LEN = 4257.0
+MERGE_GAP_MIN = 28.0
+MERGE_GAP_MAX = 60.0
 MIN_LEN_M = 15.0
 BRAKE_MARK = 20.0
 FULL_THROTTLE = 98.0
 LOCKUP_REL_PCT = -10.0
 SPIN_REL_PCT = 8.0
+
+
+def merge_gap_for(lap: Lap) -> float:
+    """Corner-merge / cluster gap scaled to track length so chicanes and long
+    circuits self-tune instead of relying on a fixed metre value. Equals
+    MERGE_GAP_M at the reference length; clamped at the extremes."""
+    raw = lap.track.get('Tracklen', '')
+    try:
+        tracklen = float(raw)
+    except (TypeError, ValueError):
+        dist = lap.ch.get('LapDistance', [])
+        tracklen = (dist[-1] - dist[0]) if len(dist) >= 2 else 0.0
+    if tracklen <= 0:
+        return MERGE_GAP_M
+    g = MERGE_GAP_M * tracklen / MERGE_GAP_REF_LEN
+    return min(max(g, MERGE_GAP_MIN), MERGE_GAP_MAX)
 
 
 @dataclass(frozen=True)
@@ -93,9 +112,10 @@ def detect_corners(lap: Lap) -> list[Corner]:
     if in_zone:
         zones.append((z_start, n - 1))
 
+    merge_gap = merge_gap_for(lap)
     merged: list[tuple[int, int]] = []
     for z in zones:
-        if merged and (dist[z[0]] - dist[merged[-1][1]]) < MERGE_GAP_M:
+        if merged and (dist[z[0]] - dist[merged[-1][1]]) < merge_gap:
             merged[-1] = (merged[-1][0], z[1])
         else:
             merged.append(list(z))

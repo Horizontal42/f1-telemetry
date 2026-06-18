@@ -6,7 +6,7 @@ from tkinter import filedialog, scrolledtext, ttk
 
 from .parser import load_lap
 from .report_common import report_path
-from . import report_technique, report_setup, report_compare, report_race
+from . import report_technique, report_setup, report_compare, report_race, report_profile
 from .rename import rename_unprocessed
 
 # project root = parent of the tool\ dir
@@ -27,6 +27,7 @@ class _App:
 
         self._mode = tk.StringVar(value='technique')
         self._lang = tk.StringVar(value='ru')
+        self._include_prompt = tk.BooleanVar(value=True)
         self._selection: list[str] = []
         self._last_dir: dict[str, str] = {}
         self._log_queue: queue.Queue[str | None] = queue.Queue()
@@ -41,7 +42,8 @@ class _App:
         mode_frame = ttk.LabelFrame(self._root, text='Mode')
         mode_frame.pack(fill='x', **pad)
         for label, value in [('Technique', 'technique'), ('Setup', 'setup'),
-                              ('Compare', 'compare'), ('Race', 'race')]:
+                              ('Compare', 'compare'), ('Race', 'race'),
+                              ('Profile', 'profile')]:
             ttk.Radiobutton(mode_frame, text=label, variable=self._mode,
                             value=value).pack(side='left', padx=6, pady=4)
 
@@ -51,6 +53,8 @@ class _App:
                         value='ru').pack(side='left', padx=6, pady=4)
         ttk.Radiobutton(lang_frame, text='EN', variable=self._lang,
                         value='en').pack(side='left', padx=6, pady=4)
+        ttk.Checkbutton(lang_frame, text='Включить промпт в отчёт / Include prompt',
+                        variable=self._include_prompt).pack(side='left', padx=16, pady=4)
 
         input_frame = ttk.LabelFrame(self._root, text='Input')
         input_frame.pack(fill='x', **pad)
@@ -81,7 +85,7 @@ class _App:
     def _browse(self) -> None:
         mode = self._mode.get()
         init = self._last_dir.get(mode, _RACES_DIR)
-        if mode == 'race':
+        if mode in ('race', 'profile'):
             d = filedialog.askdirectory(title='Select race folder', initialdir=init)
             if d:
                 self._selection = [d]
@@ -113,8 +117,8 @@ class _App:
             return f'{mode} requires exactly 1 file'
         if mode == 'compare' and len(sel) < 2:
             return 'compare requires 2+ files'
-        if mode == 'race' and (len(sel) != 1 or not os.path.isdir(sel[0])):
-            return 'race requires a directory'
+        if mode in ('race', 'profile') and (len(sel) != 1 or not os.path.isdir(sel[0])):
+            return f'{mode} requires a directory'
         return None
 
     def _set_busy(self, busy: bool) -> None:
@@ -152,32 +156,33 @@ class _App:
         mode = self._mode.get()
         sel = list(self._selection)
         lang = self._lang.get()
+        inc = self._include_prompt.get()
         self._set_busy(True)
-        threading.Thread(target=self._worker_generate, args=(mode, sel, lang),
+        threading.Thread(target=self._worker_generate, args=(mode, sel, lang, inc),
                          daemon=True).start()
 
-    def _worker_generate(self, mode: str, sel: list[str], lang: str) -> None:
+    def _worker_generate(self, mode: str, sel: list[str], lang: str, inc: bool) -> None:
         try:
             if mode == 'technique':
                 lap = load_lap(sel[0])
                 out = report_path(sel[0], 'technique')
-                abs_path, tokens = report_technique.generate(lap, out, lang)
+                abs_path, tokens = report_technique.generate(lap, out, lang, inc)
                 self._push(f'✓ {abs_path}  (~{tokens} tokens)')
 
             elif mode == 'setup':
                 lap = load_lap(sel[0])
                 out = report_path(sel[0], 'setup')
-                abs_path, tokens = report_setup.generate(lap, out, lang)
+                abs_path, tokens = report_setup.generate(lap, out, lang, inc)
                 self._push(f'✓ {abs_path}  (~{tokens} tokens)')
 
             elif mode == 'compare':
                 laps = [load_lap(f) for f in sel]
                 stem_b = os.path.splitext(os.path.basename(sel[1]))[0]
                 out = report_path(sel[0], 'compare', stem_b)
-                abs_path, tokens = report_compare.generate(laps, out, lang)
+                abs_path, tokens = report_compare.generate(laps, out, lang, inc)
                 self._push(f'✓ {abs_path}  (~{tokens} tokens)')
 
-            elif mode == 'race':
+            elif mode in ('race', 'profile'):
                 race_dir = os.path.abspath(sel[0])
                 csv_files = sorted(
                     f for f in os.listdir(race_dir) if f.lower().endswith('.csv')
@@ -186,8 +191,11 @@ class _App:
                     self._push(f'✗ No CSV files found in {race_dir}')
                     return
                 laps = [load_lap(os.path.join(race_dir, f)) for f in csv_files]
-                out = _race_output_path(race_dir)
-                abs_path, tokens = report_race.generate(laps, out, lang)
+                dirname = os.path.basename(race_dir.rstrip('/\\'))
+                suffix = '_race.md' if mode == 'race' else '_profile.md'
+                out = os.path.join(race_dir, 'reports', dirname + suffix)
+                gen_mod = report_race if mode == 'race' else report_profile
+                abs_path, tokens = gen_mod.generate(laps, out, lang, inc)
                 self._push(f'✓ {abs_path}  (~{tokens} tokens)')
 
         except Exception as e:
