@@ -51,17 +51,23 @@ python -m telemetry technique "races/Zandvoort/Практика/zandvoort_P1_L7_
 ```
 Telemetry/
   races/
-    Zandvoort/
-      Практика/                        <- CSV-файлы после переименования
-        zandvoort_P1_L7_74.074_ferrari.csv
-        reports/                       <- отчёты technique/setup/compare
-      Квалификация/
-        zandvoort_Q1_L3_74.897_ferrari.csv
-        reports/
-      Гонка/
-        zandvoort_R_L7_74.152_ferrari.csv
-        reports/
-          Гонка_race.md                <- отчёт режима race
+    F1 22/
+      Zandvoort/
+        Practice/                      <- CSV-файлы после переименования
+          zandvoort_P1_L7_74.074_ferrari.csv
+          reports/                     <- отчёты technique/setup/compare
+        Qualifying/
+          zandvoort_Q1_L3_74.897_ferrari.csv
+          reports/
+        Race/
+          zandvoort_R_L7_74.152_ferrari.csv
+          reports/
+            Race_race.md               <- отчёт режима race
+    ACC/
+      Hungaroring/
+        Practice/
+          hungaroring_P_L1_123.702_ktm_gt4.csv
+          reports/
   tool/                                <- этот репозиторий
     telemetry/
     prompts/

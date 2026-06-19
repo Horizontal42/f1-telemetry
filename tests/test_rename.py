@@ -85,10 +85,11 @@ def test_read_session_type_sample(sample_path):
 # --- read_metadata ---
 
 def test_read_metadata_sample(sample_path):
-    lap, event, track = read_metadata(sample_path)
+    lap, event, track, game = read_metadata(sample_path)
     assert lap == 7
     assert event == 'P1'
     assert track != ''
+    assert 'F1' in game or game != ''
 
 
 # --- rename_unprocessed ---
@@ -141,6 +142,7 @@ def test_rename_unprocessed_moves_to_races_dir(tmp_path, sample_path):
     assert r.new is not None and 'P1' in r.new and 'L7' in r.new
     assert os.path.exists(r.new)
     assert r.new.startswith(races_dir)
+    assert 'F1 22' in r.new
     assert 'Practice' in r.new
     assert not os.path.exists(src)
 
@@ -154,6 +156,7 @@ def test_rename_unprocessed_moves_already_renamed(tmp_path, sample_path):
     assert len(results) == 1
     r = results[0]
     assert r.status == 'renamed'
+    assert 'F1 22' in r.new
     assert 'Practice' in r.new
     assert os.path.exists(r.new)
     assert not os.path.exists(src)
@@ -200,7 +203,7 @@ def test_acc_rename_inserts_compact_token(tmp_path, acc_path):
 
 
 def test_acc_rename_lands_in_practice_folder(tmp_path, acc_path):
-    """ACC 'Practice' event files into races/<Track>/Practice/, not Other."""
+    """ACC 'Practice' event files into races/ACC/<Track>/Practice/, not Other."""
     src = str(tmp_path / "hungaroring_123.702_ktm_gt4.csv")
     shutil.copy(acc_path, src)
     races_dir = str(tmp_path / 'races')
@@ -209,6 +212,7 @@ def test_acc_rename_lands_in_practice_folder(tmp_path, acc_path):
     r = results[0]
     assert r.status == 'renamed'
     assert r.new is not None
+    assert 'ACC' in r.new
     assert 'Practice' in r.new
     assert 'Other' not in r.new
     assert os.path.exists(r.new)

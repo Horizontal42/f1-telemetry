@@ -19,7 +19,7 @@ telemetry/
   report_compare.py  Two+ laps side by side, per-corner and cumulative delta.
   report_race.py     A folder of laps: lap times (with position), stints, wear, thermals, ERS. Dedups duplicate lap numbers.
   report_profile.py  A folder of laps: cheap cross-lap corner tendencies (median per corner, per dominant compound) + auto-picked deep-dive laps. No trace.
-  rename.py          Insert session type + lap number (P1_L7) into filenames; with races_dir, sort into races/<track>/<session>/ and recurse subdirectories.
+  rename.py          Insert session type + lap number (P1_L7) into filenames; with races_dir, sort into races/<game>/<track>/<session>/ and recurse subdirectories.
   gui.py             tkinter window with two tabs (F1 22 / ACC); per-mode browse memory; runs generation/rename on a worker thread. Warns (non-blocking) when the detected game doesn't match the active tab.
 prompts/             LLM analysis prompts, ru/ and en/ subdirectories, one file per mode. Auto-appended to every report.
                      ACC-specific overrides live in prompts/<lang>/acc/<mode>.md; missing files fall back to the F1 prompt.
@@ -72,7 +72,7 @@ If a future track needs a different corner grouping, `merge_gap_for` already ada
 
 **The setup row has a trailing comma** (an empty `FuelLoad` tail field in some exports). The parser drops trailing empties so the setup dict has no blank-string key.
 
-**Rename with `races_dir` sorts into folders and walks subdirectories.** `rename_unprocessed(targets, races_dir)` when `races_dir` is set: (1) recursively scans all subdirectories via `os.walk`, (2) reads metadata from each CSV (`read_metadata` → lap, event, track), (3) inserts tokens if absent, (4) creates `races/<track_safe>/Practice|Qualifying|Race|Sprint/` and moves the file there, (5) even already-renamed files are moved if they're in the wrong folder, (6) only skips files that are already in the right place with the right name. Without `races_dir` it works as before — renames in-place in the original folder.
+**Rename with `races_dir` sorts into folders and walks subdirectories.** `rename_unprocessed(targets, races_dir)` when `races_dir` is set: (1) recursively scans all subdirectories via `os.walk`, (2) reads metadata from each CSV (`read_metadata` → lap, event, track, game), (3) inserts tokens if absent, (4) creates `races/F1 22|ACC/<track_safe>/Practice|Qualifying|Race|Sprint/` and moves the file there, (5) even already-renamed files are moved if they're in the wrong folder, (6) only skips files that are already in the right place with the right name. Without `races_dir` it works as before — renames in-place in the original folder.
 
 **Reports go next to the input, not next to the program.** `report_path` derives the `reports/` directory from the *input CSV's* folder. `race` mode puts the report inside the race session folder (`<race_dir>/reports/`). Moving the tool does not move where reports land.
 

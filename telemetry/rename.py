@@ -40,6 +40,10 @@ def _normalise_event(raw: str) -> str:
     return raw.strip()
 
 
+def _game_folder(game_raw: str) -> str:
+    return 'ACC' if game_raw.upper().startswith('ACC') else 'F1 22'
+
+
 def _session_folder(event: str) -> str:
     # event is already the canonical token at call sites inside this module.
     e = event.upper()
@@ -123,8 +127,8 @@ def read_session_type(path: str) -> str:
     return session.get('event', '').strip()
 
 
-def read_metadata(path: str) -> tuple[int, str, str]:
-    """Returns (lap_number, event_type, track_name)."""
+def read_metadata(path: str) -> tuple[int, str, str, str]:
+    """Returns (lap_number, event_type, track_name, game_raw)."""
     with open(path, encoding='utf-8') as f:
         lines = [f.readline() for _ in range(5)]
     sess_keys = _parse_header_row(lines[1])
@@ -137,6 +141,7 @@ def read_metadata(path: str) -> tuple[int, str, str]:
         int(float(track['Lap'])),
         session.get('event', '').strip(),
         session.get('track', '').strip(),
+        session.get('Game', '').strip(),
     )
 
 
@@ -181,7 +186,7 @@ def rename_unprocessed(targets: list[str], races_dir: str | None = None) -> list
                 results.append(RenameResult(name, None, 'skipped', 'already processed'))
                 continue
             try:
-                lap, session_type, _ = read_metadata(p)
+                lap, session_type, _, _game = read_metadata(p)
             except Exception as e:
                 results.append(RenameResult(name, None, 'error', str(e)))
                 continue
@@ -193,7 +198,7 @@ def rename_unprocessed(targets: list[str], races_dir: str | None = None) -> list
             dest = os.path.join(os.path.dirname(p), new_name)
         else:
             try:
-                lap, session_type, track_name = read_metadata(p)
+                lap, session_type, track_name, game_raw = read_metadata(p)
             except Exception as e:
                 results.append(RenameResult(name, None, 'error', str(e)))
                 continue
@@ -202,7 +207,8 @@ def rename_unprocessed(targets: list[str], races_dir: str | None = None) -> list
                 continue
             session_type = _normalise_event(session_type)
             new_name = name if _is_processed(stem) else insert_tokens(name, session_type, lap)
-            dest_dir = os.path.join(races_dir, _safe_dirname(track_name), _session_folder(session_type))
+            dest_dir = os.path.join(races_dir, _game_folder(game_raw),
+                                    _safe_dirname(track_name), _session_folder(session_type))
             dest = os.path.join(dest_dir, new_name)
             if os.path.abspath(p) == os.path.abspath(dest):
                 results.append(RenameResult(name, None, 'skipped', 'already in place'))

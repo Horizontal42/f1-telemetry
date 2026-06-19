@@ -51,17 +51,23 @@ GT3/GT4 cars have no hybrid system, and ACC does not export the car setup:
 ```
 Telemetry/
   races/
-    Zandvoort/
-      Practice/                        <- CSVs go here after renaming
-        zandvoort_P1_L7_74.074_ferrari.csv
-        reports/                       <- technique/setup/compare reports land here
-      Qualifying/
-        zandvoort_Q1_L3_74.897_ferrari.csv
-        reports/
-      Race/
-        zandvoort_R_L7_74.152_ferrari.csv
-        reports/
-          Race_race.md                 <- race mode report
+    F1 22/
+      Zandvoort/
+        Practice/                      <- CSVs go here after renaming
+          zandvoort_P1_L7_74.074_ferrari.csv
+          reports/                     <- technique/setup/compare reports land here
+        Qualifying/
+          zandvoort_Q1_L3_74.897_ferrari.csv
+          reports/
+        Race/
+          zandvoort_R_L7_74.152_ferrari.csv
+          reports/
+            Race_race.md               <- race mode report
+    ACC/
+      Hungaroring/
+        Practice/
+          hungaroring_P_L1_123.702_ktm_gt4.csv
+          reports/
   tool/                                <- this repository
     telemetry/
     prompts/
