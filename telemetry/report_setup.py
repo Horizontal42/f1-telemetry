@@ -2,7 +2,7 @@ from .parser import Lap
 from .segments import detect_corners, Corner
 from .segments import _indices_in_range
 from .report_common import (
-    header_block, legend, md_table, write_report, load_prompt,
+    header_block, legend, md_table, write_report, load_prompt, game_of,
     LEGEND_DIST, LEGEND_TIME, LEGEND_SPD, LEGEND_THR_BRK, LEGEND_STEER,
     LEGEND_GEAR, LEGEND_DRS, LEGEND_GLAT, LEGEND_GLON, LEGEND_FUEL,
     LEGEND_LOCK, LEGEND_SPIN, LEGEND_STEER_G_CAVEAT, LEGEND_SUSP,
@@ -220,14 +220,23 @@ def _suspension_section(lap: Lap, corners: list[Corner]) -> str | None:
     return rake_line + '\n\n' + roll_table
 
 
-def generate(lap: Lap, out_path: str, lang: str = 'ru', include_prompt: bool = True) -> tuple[str, int]:
+def generate(lap: Lap, out_path: str, lang: str = 'ru', include_prompt: bool = True,
+             game: str | None = None) -> tuple[str, int]:
+    g = game or game_of(lap)
     corners = detect_corners(lap)
     susp = _suspension_section(lap, corners)
+
+    if g == 'acc':
+        setup_section = ('_ACC does not export car setup — analysis derived from telemetry below._'
+                         if lang == 'en' else
+                         '_ACC не экспортирует сетап — разбор баланса из телеметрии ниже._')
+    else:
+        setup_section = _full_setup_table(lap)
 
     parts = [
         header_block(lap),
         '\n## Setup',
-        _full_setup_table(lap),
+        setup_section,
         '\n## Corner balance',
         _corner_balance(lap, corners),
         '\n## Tyres',
@@ -250,7 +259,7 @@ def generate(lap: Lap, out_path: str, lang: str = 'ru', include_prompt: bool = T
     ]
     text = '\n'.join(parts)
     if include_prompt:
-        prompt = load_prompt('setup', lang)
+        prompt = load_prompt('setup', lang, g)
         if prompt:
             text += '\n\n---\n\n' + prompt
     return write_report(out_path, text)

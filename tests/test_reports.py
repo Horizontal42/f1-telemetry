@@ -8,6 +8,8 @@ import telemetry.report_race as rr
 import telemetry.report_profile as rp
 from telemetry.__main__ import is_fresh
 from telemetry.parser import Lap
+from telemetry import report_common
+from telemetry.report_common import game_of, load_prompt
 
 
 def _check(result, path):
@@ -177,6 +179,59 @@ def test_is_fresh_cache(tmp_path):
     assert is_fresh(str(rep), [str(src)]) is True
     os.utime(src, (rep.stat().st_atime + 20, rep.stat().st_mtime + 20))
     assert is_fresh(str(rep), [str(src)]) is False
+
+
+class TestACC:
+    """ACC support: game detection, prompt fallback, game-aware report sections."""
+
+    def test_game_of_acc_vs_f1(self, acc_lap, sample_lap):
+        assert game_of(acc_lap) == 'acc'
+        assert game_of(sample_lap) == 'f1'
+
+    def test_load_prompt_acc_falls_back_to_f1(self):
+        # ACC requests resolve to the ACC prompt if present, else the F1 prompt —
+        # never empty while an F1 prompt exists.
+        base = os.path.normpath(os.path.join(
+            os.path.dirname(report_common.__file__), '..', 'prompts', 'ru'))
+        for mode in ('technique', 'setup', 'compare', 'race'):
+            acc_file = os.path.join(base, 'acc', f'{mode}.md')
+            f1_file = os.path.join(base, f'{mode}.md')
+            expected = open(acc_file if os.path.exists(acc_file) else f1_file,
+                            encoding='utf-8').read().strip()
+            assert load_prompt(mode, 'ru', 'acc') == expected
+            assert load_prompt(mode, 'ru', 'f1') == open(f1_file, encoding='utf-8').read().strip()
+
+    def test_acc_setup_no_param_table_keeps_balance(self, acc_lap, tmp_path):
+        out = str(tmp_path / "acc_setup.md")
+        rs.generate(acc_lap, out, 'ru', include_prompt=False)
+        text = open(out, encoding="utf-8").read()
+        assert "| Parameter | Value |" not in text   # zero-filled setup table dropped
+        assert "не экспортирует сетап" in text        # explanatory note instead
+        assert "## Corner balance" in text            # telemetry-derived sections kept
+        assert "## Tyres" in text
+
+    def test_acc_technique_no_setup_line_no_ers(self, acc_lap, tmp_path):
+        out = str(tmp_path / "acc_tech.md")
+        rt.generate(acc_lap, out, 'ru', include_prompt=False)
+        text = open(out, encoding="utf-8").read()
+        assert "## Corners" in text
+        assert "**Setup:**" not in text   # zero-filled setup summary skipped
+        assert "ERS spent:" not in text   # hybrid block dropped
+
+    def test_f1_technique_keeps_setup_and_ers(self, sample_lap, tmp_path):
+        # regression: F1 path unchanged
+        out = str(tmp_path / "f1_tech.md")
+        rt.generate(sample_lap, out, 'ru', include_prompt=False)
+        text = open(out, encoding="utf-8").read()
+        assert "**Setup:**" in text
+        assert "ERS spent:" in text
+
+    def test_acc_race_skips_ers_table(self, acc_lap, tmp_path):
+        out = str(tmp_path / "acc_race.md")
+        rr.generate([acc_lap], out, 'ru', include_prompt=False)
+        text = open(out, encoding="utf-8").read()
+        assert "## ERS per lap" not in text
+        assert "## Lap times" in text
 
 
 class TestRegressionReports:

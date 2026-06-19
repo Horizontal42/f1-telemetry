@@ -4,6 +4,10 @@ import tempfile
 from .parser import Lap, laptime_s, sector_times
 
 
+def game_of(lap: Lap) -> str:
+    return 'acc' if lap.session.get('Game', '').upper().startswith('ACC') else 'f1'
+
+
 def header_block(lap: Lap) -> str:
     s = lap.session
     t = lap.track
@@ -103,14 +107,21 @@ def write_report(path: str, text: str) -> tuple[str, int]:
     return os.path.abspath(path), tokens
 
 
-def load_prompt(mode: str, lang: str) -> str:
+def load_prompt(mode: str, lang: str, game: str = 'f1') -> str:
     here = os.path.dirname(__file__)
-    p = os.path.normpath(os.path.join(here, '..', 'prompts', lang, f'{mode}.md'))
-    try:
-        with open(p, encoding='utf-8') as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return ''
+    base = os.path.join(here, '..', 'prompts', lang)
+    # ACC gets its own prompt set, falling back to the F1 prompt when absent.
+    candidates = []
+    if game == 'acc':
+        candidates.append(os.path.normpath(os.path.join(base, 'acc', f'{mode}.md')))
+    candidates.append(os.path.normpath(os.path.join(base, f'{mode}.md')))
+    for p in candidates:
+        try:
+            with open(p, encoding='utf-8') as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            continue
+    return ''
 
 
 def report_path(input_path: str, mode: str, other_stem: str = '') -> str:

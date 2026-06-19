@@ -61,6 +61,8 @@ def main() -> None:
     parser.add_argument('mode', choices=['technique', 'setup', 'compare', 'race', 'profile', 'rename', 'gui'])
     parser.add_argument('files', nargs='*')
     parser.add_argument('--lang', choices=['ru', 'en'], default='ru')
+    parser.add_argument('--game', choices=['auto', 'f1', 'acc'], default='auto',
+                        help='override game detection (default: auto, from the Game field)')
     parser.add_argument('--no-prompt', action='store_true',
                         help='omit the embedded analysis prompt (for agent pipelines)')
     parser.add_argument('--force', action='store_true',
@@ -70,6 +72,7 @@ def main() -> None:
     mode: str = args.mode
     files: list[str] = args.files
     lang: str = args.lang
+    game: str | None = None if args.game == 'auto' else args.game
     include_prompt: bool = not args.no_prompt
     force: bool = args.force
 
@@ -105,18 +108,18 @@ def main() -> None:
     if mode == 'technique':
         out = report_path(files[0], 'technique')
         _emit(out, [files[0]],
-              lambda: report_technique.generate(load_lap(files[0]), out, lang, include_prompt))
+              lambda: report_technique.generate(load_lap(files[0]), out, lang, include_prompt, game))
 
     elif mode == 'setup':
         out = report_path(files[0], 'setup')
         _emit(out, [files[0]],
-              lambda: report_setup.generate(load_lap(files[0]), out, lang, include_prompt))
+              lambda: report_setup.generate(load_lap(files[0]), out, lang, include_prompt, game))
 
     elif mode == 'compare':
         stem_b = os.path.splitext(os.path.basename(files[1]))[0]
         out = report_path(files[0], 'compare', stem_b)
         _emit(out, files,
-              lambda: report_compare.generate([load_lap(f) for f in files], out, lang, include_prompt))
+              lambda: report_compare.generate([load_lap(f) for f in files], out, lang, include_prompt, game))
 
     elif mode in ('race', 'profile'):
         race_dir = os.path.abspath(files[0])
@@ -129,9 +132,12 @@ def main() -> None:
         dirname = os.path.basename(race_dir.rstrip('/\\'))
         suffix = '_race.md' if mode == 'race' else '_profile.md'
         out = os.path.join(race_dir, 'reports', dirname + suffix)
-        gen_mod = report_race if mode == 'race' else report_profile
-        _emit(out, csv_paths,
-              lambda: gen_mod.generate([load_lap(p) for p in csv_paths], out, lang, include_prompt))
+        if mode == 'race':
+            _emit(out, csv_paths,
+                  lambda: report_race.generate([load_lap(p) for p in csv_paths], out, lang, include_prompt, game))
+        else:
+            _emit(out, csv_paths,
+                  lambda: report_profile.generate([load_lap(p) for p in csv_paths], out, lang, include_prompt))
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@
 
 # Architecture
 
-A telemetry CSV becomes a Markdown report through a small linear pipeline. Everything is stdlib Python; there is no framework and no global state.
+A telemetry CSV (F1 22 or ACC) becomes a Markdown report through a small linear pipeline. Everything is stdlib Python; there is no framework and no global state.
 
 ## Files
 
@@ -13,15 +13,16 @@ telemetry/
   segments.py        Lap -> corners & straights. Zone detection + numbering.
   corner_metrics.py  Per-zone number crunching: braking point, lock/spin, coast, temps.
   resample.py        Adaptive distance grid + channel interpolation for the trace.
-  report_common.py   Header block, legend strings, md_table, token_estimate, load_prompt, atomic write.
+  report_common.py   Header block, legend strings, md_table, token_estimate, game_of, load_prompt, atomic write.
   report_technique.py  Driving report (corners, straights, cost, trace).
   report_setup.py    Car report (setup, balance, tyres, brakes, suspension, phases).
   report_compare.py  Two+ laps side by side, per-corner and cumulative delta.
   report_race.py     A folder of laps: lap times (with position), stints, wear, thermals, ERS. Dedups duplicate lap numbers.
   report_profile.py  A folder of laps: cheap cross-lap corner tendencies (median per corner, per dominant compound) + auto-picked deep-dive laps. No trace.
   rename.py          Insert session type + lap number (P1_L7) into filenames; with races_dir, sort into races/<track>/<session>/ and recurse subdirectories.
-  gui.py             tkinter window; per-mode browse memory; runs generation/rename on a worker thread.
+  gui.py             tkinter window with two tabs (F1 22 / ACC); per-mode browse memory; runs generation/rename on a worker thread. Warns (non-blocking) when the detected game doesn't match the active tab.
 prompts/             LLM analysis prompts, ru/ and en/ subdirectories, one file per mode. Auto-appended to every report.
+                     ACC-specific overrides live in prompts/<lang>/acc/<mode>.md; missing files fall back to the F1 prompt.
 tests/               pytest suite + fixture laps.
 ```
 
@@ -31,7 +32,7 @@ tests/               pytest suite + fixture laps.
 2. **`parser.load_lap`** reads the file as UTF-8 and splits it into four meta blocks (session, track, setup) plus the 108-channel telemetry table. Channel names are normalised by stripping the ` [unit]` suffix. Every column that is entirely zero is dropped — the game writes many dead channels (see Gotchas).
 3. **`segments.detect_corners`** walks the samples, marks each as "cornering" when `|Steer| > STEER_ON` or `Brake > BRAKE_ON`, merges adjacent zones closer than `MERGE_GAP_M`, drops zones shorter than `MIN_LEN_M`, and numbers what's left T1..Tn by distance. For each zone it calls **`corner_metrics.corner_from_zone`**, which extracts the braking point, apex, gear, full-throttle point, peak brake/gLat, relative lock%/spin%, coast distance, and rear tyre temperature peak. `straights` fills the gaps between corners.
 4. **`resample.adaptive_points`** builds a distance grid that is dense inside (and on approach to) corners and sparse on straights — the step sizes default to the lap's own median sample spacing via `auto_steps`, so denser raw telemetry yields a denser trace. **`sample_at`** interpolates each channel onto that grid (nearest-sample for discrete channels like Gear/DRS).
-5. The **`report_<mode>.generate(…, lang, include_prompt=True)`** function assembles Markdown from `report_common` helpers (`header_block`, `md_table`, `legend`) and the data above. When `include_prompt` is set it calls **`load_prompt(mode, lang)`** to read the matching prompt from `prompts/<lang>/<mode>.md` and appends it after a `---` separator (CLI `--no-prompt` / GUI checkbox turn this off). Finally **`write_report`** writes atomically (temp file + `os.replace`) and returns `(abs_path, tokens)`. Before generating, `__main__` skips the run via **`is_fresh(report, sources)`** when an up-to-date report exists (override with `--force`).
+5. The **`report_<mode>.generate(…, lang, include_prompt=True)`** function assembles Markdown from `report_common` helpers (`header_block`, `md_table`, `legend`) and the data above. **`game_of(lap)`** inspects the `Game` session field and returns `'acc'` (if the field starts with `"ACC"`) or `'f1'`; the report generators use this to suppress DRS/ERS/hybrid sections for ACC and to replace the setup parameter table with a note when all setup values are zero (as ACC always exports). When `include_prompt` is set it calls **`load_prompt(mode, lang, game)`** which first tries `prompts/<lang>/acc/<mode>.md` for ACC and falls back to `prompts/<lang>/<mode>.md` if absent, then appends the result after a `---` separator (CLI `--no-prompt` / GUI checkbox turn this off). Finally **`write_report`** writes atomically (temp file + `os.replace`) and returns `(abs_path, tokens)`. Before generating, `__main__` skips the run via **`is_fresh(report, sources)`** when an up-to-date report exists (override with `--force`).
 6. **`__main__`** prints that path and `~N tokens (budget 60k)`. The **GUI** shows the same tuple in its log instead of printing.
 
 ## Adding things
@@ -74,3 +75,9 @@ If a future track needs a different corner grouping, `merge_gap_for` already ada
 **Rename with `races_dir` sorts into folders and walks subdirectories.** `rename_unprocessed(targets, races_dir)` when `races_dir` is set: (1) recursively scans all subdirectories via `os.walk`, (2) reads metadata from each CSV (`read_metadata` → lap, event, track), (3) inserts tokens if absent, (4) creates `races/<track_safe>/Practice|Qualifying|Race|Sprint/` and moves the file there, (5) even already-renamed files are moved if they're in the wrong folder, (6) only skips files that are already in the right place with the right name. Without `races_dir` it works as before — renames in-place in the original folder.
 
 **Reports go next to the input, not next to the program.** `report_path` derives the `reports/` directory from the *input CSV's* folder. `race` mode puts the report inside the race session folder (`<race_dir>/reports/`). Moving the tool does not move where reports land.
+
+**Game is derived from the `Game` metadata field and threaded through report generation.** `game_of(lap)` reads `lap.session['Game']`; the field starts with `"ACC"` for Assetto Corsa Competizione and is something else for F1 22. Every report generator receives the lap and calls `game_of` to decide which sections to emit. The CLI `--game` flag can override detection by patching the session field before dispatch.
+
+**ACC setup is all zeros and is intentionally not rendered as a parameter table.** ACC's CSV export always writes zeros for every setup field. `report_setup` checks whether all setup values are zero and, when true, replaces the parameter table with a single explanatory note rather than printing a table of meaningless zeros.
+
+**ACC session events use full words; F1 22 uses short codes.** F1 22 writes session codes like `P1`, `Q1`, `R` directly. ACC writes `Practice`, `Qualifying`, `Race`. The rename module normalises ACC full-word events to compact canonical codes (Practice→P, Qualifying→Q, Race→R) before inserting them into the filename and choosing the destination folder. The inserted token is the same compact code that the session-pattern recogniser expects, so re-running rename on already-processed ACC files is idempotent (they are skipped, not double-tagged).

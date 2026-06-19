@@ -42,7 +42,11 @@ def test_lap_token_present(stem, expected):
     ("zandvoort_Q2_L3_ferrari", True),
     ("zandvoort_R_L1_ferrari", True),
     ("zandvoort_FP1_L5_ferrari", True),
-    ("zandvoort_P_74.074_ferrari", False),   # bare P without digit not matched
+    # ACC compact tokens
+    ("hungaroring_P_L1_123.702_ktm_gt4", True),   # bare P (ACC Practice)
+    ("hungaroring_Q_L1_123.702_ktm_gt4", True),   # bare Q (ACC Qualifying)
+    ("hungaroring_HL_L1_123.702_ktm_gt4", True),  # Hotlap
+    ("hungaroring_HS_L1_123.702_ktm_gt4", True),  # Hotstint
     ("zandvoort_L7_74.074_ferrari", False),
     ("notoken", False),
 ])
@@ -176,3 +180,44 @@ def test_rename_unprocessed_walks_subdirs(tmp_path, sample_path):
     assert len(results) == 1
     assert results[0].status == 'renamed'
     assert 'Practice' in results[0].new
+
+
+# --- ACC support ---
+
+def test_acc_rename_inserts_compact_token(tmp_path, acc_path):
+    """ACC 'Practice' event normalises to 'P' and lap reads as L1."""
+    src = str(tmp_path / "hungaroring_123.702_ktm_gt4.csv")
+    shutil.copy(acc_path, src)
+    results = rename_unprocessed([src])
+    assert len(results) == 1
+    r = results[0]
+    assert r.status == 'renamed'
+    assert r.new is not None
+    new_stem = os.path.splitext(os.path.basename(r.new))[0]
+    tokens = new_stem.split('_')
+    assert 'P' in tokens
+    assert 'L1' in tokens
+
+
+def test_acc_rename_lands_in_practice_folder(tmp_path, acc_path):
+    """ACC 'Practice' event files into races/<Track>/Practice/, not Other."""
+    src = str(tmp_path / "hungaroring_123.702_ktm_gt4.csv")
+    shutil.copy(acc_path, src)
+    races_dir = str(tmp_path / 'races')
+    results = rename_unprocessed([src], races_dir=races_dir)
+    assert len(results) == 1
+    r = results[0]
+    assert r.status == 'renamed'
+    assert r.new is not None
+    assert 'Practice' in r.new
+    assert 'Other' not in r.new
+    assert os.path.exists(r.new)
+
+
+def test_acc_rename_idempotent(tmp_path, acc_path):
+    """Second rename_unprocessed run on an already-renamed ACC file returns skipped."""
+    src = str(tmp_path / "hungaroring_123.702_ktm_gt4.csv")
+    shutil.copy(acc_path, src)
+    rename_unprocessed([src])
+    results = rename_unprocessed([str(tmp_path)])
+    assert all(r.status == 'skipped' for r in results)

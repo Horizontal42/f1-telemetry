@@ -3,7 +3,7 @@ from .segments import detect_corners, straights, Corner, Straight
 from .resample import adaptive_points, sample_at, format_trace_row
 from .report_common import (
     header_block, setup_summary, legend, md_table, write_report, report_path,
-    load_prompt,
+    load_prompt, game_of,
     LEGEND_DIST, LEGEND_TIME, LEGEND_SPD, LEGEND_THR_BRK, LEGEND_STEER,
     LEGEND_GEAR, LEGEND_DRS, LEGEND_GLAT, LEGEND_GLON, LEGEND_FUEL, LEGEND_ERS,
     LEGEND_LOCK, LEGEND_SPIN, LEGEND_TF, LEGEND_RPM, LEGEND_SLIP, LEGEND_YAW,
@@ -56,7 +56,7 @@ def _straight_rows(ss: list[Straight]) -> list[list[str]]:
     return rows
 
 
-def _driving_cost(lap: Lap, corners: list[Corner]) -> str:
+def _driving_cost(lap: Lap, corners: list[Corner], game: str = 'f1') -> str:
     ch = lap.ch
     fuel = ch.get('FuelRemaining', [])
     fuel_used = (fuel[0] - fuel[-1]) if len(fuel) >= 2 else 0.0
@@ -94,7 +94,12 @@ def _driving_cost(lap: Lap, corners: list[Corner]) -> str:
         f'- Fuel used: {fuel_used:.2f} kg',
         '- Tyre wear Δ:',
         *wear_lines,
-        f'- ERS spent: {ers_mj:.3f} MJ | MGU-K harvested: {mguk_mj:.3f} MJ | MGU-H harvested: {mguh_mj:.3f} MJ',
+    ]
+    if game != 'acc':
+        lines.append(
+            f'- ERS spent: {ers_mj:.3f} MJ | MGU-K harvested: {mguk_mj:.3f} MJ | MGU-H harvested: {mguh_mj:.3f} MJ'
+        )
+    lines += [
         f'- Corners flagged LOCK: {lock_count} | SPIN: {spin_count}',
         f'- Worst lock%: {worst_lock_str} | Worst spin%: {worst_spin_str}',
         '- Max brake temps:',
@@ -150,7 +155,9 @@ def _trace_block(lap: Lap, corners: list[Corner]) -> str:
     return '```\n' + header + '\n' + '\n'.join(rows) + '\n```'
 
 
-def generate(lap: Lap, out_path: str, lang: str = 'ru', include_prompt: bool = True) -> tuple[str, int]:
+def generate(lap: Lap, out_path: str, lang: str = 'ru', include_prompt: bool = True,
+             game: str | None = None) -> tuple[str, int]:
+    g = game or game_of(lap)
     corners = detect_corners(lap)
     ss = straights(corners, lap)
 
@@ -163,15 +170,16 @@ def generate(lap: Lap, out_path: str, lang: str = 'ru', include_prompt: bool = T
         _straight_rows(ss),
     )
 
-    parts = [
-        header_block(lap),
-        f'\n**Setup:** {setup_summary(lap)}',
+    parts = [header_block(lap)]
+    if g != 'acc':
+        parts.append(f'\n**Setup:** {setup_summary(lap)}')
+    parts += [
         '\n## Corners',
         corner_table,
         '\n## Straights',
         straight_table,
         '\n## Driving cost (per lap)',
-        _driving_cost(lap, corners),
+        _driving_cost(lap, corners, g),
         '\n## Trace',
         _trace_block(lap, corners),
         '\n' + legend([
@@ -182,7 +190,7 @@ def generate(lap: Lap, out_path: str, lang: str = 'ru', include_prompt: bool = T
     ]
     text = '\n'.join(parts)
     if include_prompt:
-        prompt = load_prompt('technique', lang)
+        prompt = load_prompt('technique', lang, g)
         if prompt:
             text += '\n\n---\n\n' + prompt
     return write_report(out_path, text)

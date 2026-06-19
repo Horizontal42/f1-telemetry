@@ -1,5 +1,5 @@
 from .parser import Lap, laptime_s, sector_times
-from .report_common import md_table, write_report, load_prompt
+from .report_common import md_table, write_report, load_prompt, game_of
 
 
 def _fmt_laptime(s: float) -> str:
@@ -293,10 +293,12 @@ def _ers_table(laps: list[Lap]) -> str:
     return md_table(['Lap', 'ERS MJ', 'MGU-K MJ', 'MGU-H MJ'], rows)
 
 
-def generate(laps: list[Lap], out_path: str, lang: str = 'ru', include_prompt: bool = True) -> tuple[str, int]:
+def generate(laps: list[Lap], out_path: str, lang: str = 'ru', include_prompt: bool = True,
+             game: str | None = None) -> tuple[str, int]:
     laps = _dedup_laps(laps)
     laps = _sort_laps(laps)
     stints, ages = _assign_stints(laps)
+    g = game or (game_of(laps[0]) if laps else 'f1')
 
     parts = [
         _header(laps),
@@ -308,12 +310,12 @@ def generate(laps: list[Lap], out_path: str, lang: str = 'ru', include_prompt: b
         _tyre_wear_table(laps),
         '\n## Thermal summary per lap',
         _thermal_table(laps),
-        '\n## ERS per lap',
-        _ers_table(laps),
     ]
+    if g != 'acc':
+        parts += ['\n## ERS per lap', _ers_table(laps)]
     text = '\n'.join(parts)
     if include_prompt:
-        prompt = load_prompt('race', lang)
+        prompt = load_prompt('race', lang, g)
         if prompt:
             text += '\n\n---\n\n' + prompt
     return write_report(out_path, text)

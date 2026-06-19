@@ -4,7 +4,7 @@ from .parser import Lap, laptime_s, sector_times
 from .segments import detect_corners, Corner
 from .resample import adaptive_points, sample_at
 from .report_common import (
-    legend, md_table, write_report, token_estimate, load_prompt,
+    legend, md_table, write_report, token_estimate, load_prompt, game_of,
     LEGEND_DIST, LEGEND_SPD, LEGEND_DT_SEG, LEGEND_DT_CUM,
 )
 
@@ -230,8 +230,10 @@ def _delta_trace(laps: list[Lap], corners: list[Corner]) -> tuple[str, list[floa
     return block, final_deltas
 
 
-def generate(laps: list[Lap], out_path: str, lang: str = 'ru', include_prompt: bool = True) -> tuple[str, int]:
+def generate(laps: list[Lap], out_path: str, lang: str = 'ru', include_prompt: bool = True,
+             game: str | None = None) -> tuple[str, int]:
     lap_a = laps[0]
+    g = game or game_of(lap_a)
     corners = detect_corners(lap_a)
 
     head_table = _header_table(laps)
@@ -257,7 +259,7 @@ def generate(laps: list[Lap], out_path: str, lang: str = 'ru', include_prompt: b
     ]
     text = '\n'.join(parts)
     if include_prompt:
-        prompt = load_prompt('compare', lang)
+        prompt = load_prompt('compare', lang, g)
         if prompt:
             text += '\n\n---\n\n' + prompt
     return write_report(out_path, text)

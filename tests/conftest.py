@@ -18,3 +18,13 @@ def truncated_path():
 @pytest.fixture(scope="session")
 def sample_lap(sample_path):
     return load_lap(sample_path)
+
+
+@pytest.fixture(scope="session")
+def acc_path():
+    return os.path.join(_FIXTURES, "acc_lap.csv")
+
+
+@pytest.fixture(scope="session")
+def acc_lap(acc_path):
+    return load_lap(acc_path)

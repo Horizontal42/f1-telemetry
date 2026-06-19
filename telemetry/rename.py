@@ -4,19 +4,57 @@ from dataclasses import dataclass
 
 from .parser import _parse_header_row, _parse_value_row
 
-_SESSION_PAT = re.compile(r'^(FP[1-3]|P[1-3]|Q[1-3]|R|Race|Sprint)$', re.IGNORECASE)
+# Canonical token pattern — every token we ever insert must be listed here so
+# _is_processed returns True on a second run (idempotency guarantee).
+_SESSION_PAT = re.compile(
+    r'^(FP[1-3]|P[1-3]|P|Q[1-3]|SQ[1-3]|Q|R|Race|Sprint|HL|HS)$',
+    re.IGNORECASE,
+)
+
+# Maps ACC full-word event values to compact tokens used in filenames.
+# Prefix-match on lowercased value so "Practice 1" etc. also normalise.
+# F1 short codes pass through unchanged (they won't match any prefix here).
+_ACC_NORM: list[tuple[str, str]] = [
+    ('practice',    'P'),
+    ('qualifying',  'Q'),
+    # Superpole is ACC's single-lap qualifying format → Q folder makes sense.
+    ('superpole',   'Q'),
+    ('hotlap',      'HL'),
+    ('hotstint',    'HS'),
+    ('race',        'R'),
+    ('sprint',      'Sprint'),
+]
+
+
+def _normalise_event(raw: str) -> str:
+    """Return the canonical session token for a raw event string.
+
+    F1 short codes (P1, Q2, R, Sprint, FP1 …) are returned as-is.
+    ACC full-word values are mapped to compact tokens via prefix match.
+    """
+    lo = raw.strip().lower()
+    for prefix, token in _ACC_NORM:
+        if lo.startswith(prefix):
+            return token
+    # Unknown / F1 code — pass through unchanged so F1 files still work.
+    return raw.strip()
 
 
 def _session_folder(event: str) -> str:
+    # event is already the canonical token at call sites inside this module.
     e = event.upper()
-    if re.match(r'^(FP[1-3]|P[1-3])$', e):
+    if re.match(r'^(FP[1-3]|P[1-3]|P)$', e):
         return 'Practice'
-    if re.match(r'^(SQ[1-3]|Q[1-3])$', e):
+    if re.match(r'^(SQ[1-3]|Q[1-3]|Q)$', e):
         return 'Qualifying'
     if re.match(r'^SPRINT$', e):
         return 'Sprint'
     if re.match(r'^(R|RACE)$', e):
         return 'Race'
+    if re.match(r'^HL$', e):
+        return 'Hotlap'
+    if re.match(r'^HS$', e):
+        return 'Hotstint'
     return 'Other'
 
 
@@ -150,6 +188,7 @@ def rename_unprocessed(targets: list[str], races_dir: str | None = None) -> list
             if not session_type:
                 results.append(RenameResult(name, None, 'error', 'session type not found in CSV'))
                 continue
+            session_type = _normalise_event(session_type)
             new_name = insert_tokens(name, session_type, lap)
             dest = os.path.join(os.path.dirname(p), new_name)
         else:
@@ -161,6 +200,7 @@ def rename_unprocessed(targets: list[str], races_dir: str | None = None) -> list
             if not session_type:
                 results.append(RenameResult(name, None, 'error', 'session type not found in CSV'))
                 continue
+            session_type = _normalise_event(session_type)
             new_name = name if _is_processed(stem) else insert_tokens(name, session_type, lap)
             dest_dir = os.path.join(races_dir, _safe_dirname(track_name), _session_folder(session_type))
             dest = os.path.join(dest_dir, new_name)
